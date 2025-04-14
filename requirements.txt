@@ -26,5 +26,4 @@ sentence-transformers>=2.2.0
 
 # Remove llama-index related packages as they're causing conflicts
 streamlit>=1.30.0
-st_audiorec
-
+streamlit-audiorec
