@@ -1,0 +1,30 @@
+# Core dependencies with specific versions
+pydantic>=2.5.2,<3.0.0
+pydantic-core>=2.14.5
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-core>=0.1.10
+openai>=1.12.0
+
+# Numpy and related packages
+numpy==1.26.4
+Pillow>=10.1.0,<11.0.0
+
+# PDF and image processing (updated versions)
+PyMuPDF>=1.23.0
+faiss-cpu
+
+# Audio processing (updated versions)
+sounddevice>=0.4.6
+pygame==2.5.2
+
+# AI and ML dependencies (updated versions)
+huggingface-hub>=0.20.0
+gTTS>=2.5.0
+tiktoken>=0.5.0
+sentence-transformers>=2.2.0
+
+# Remove llama-index related packages as they're causing conflicts
+streamlit>=1.30.0
+st_audiorec
+
