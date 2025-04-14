@@ -5,6 +5,7 @@ import os
 import numpy as np
 import wave
 from gtts import gTTS
+# import sounddevice as sd  # Removed for Streamlit Community Cloud compatibility
 from st_audiorec import st_audiorec
 from huggingface_hub import InferenceClient
 from langchain.embeddings import HuggingFaceEmbeddings
@@ -155,17 +156,7 @@ def text_to_speech(text, lang="ar"):
     except Exception as e:
         st.error(f"TTS Error: {str(e)}")
         return None
-
-def record_audio(duration=5, sample_rate=16000):
-    st.info("🎤 Recording... Speak now!")
-    audio = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype=np.int16)
-    sd.wait()
-    temp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-    with wave.open(temp_wav.name, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(audio.tobytes())
+# record_audio is not used in Streamlit Community Cloud (browser-based audio only)
     return temp_wav.name
 def transcribe_audio(file_path, lang="ar"):
     api_key = "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"
@@ -231,7 +222,8 @@ if uploaded_pdf:
                 retriever = faiss_index.as_retriever()
 
                 # Set up LLM and RetrievalQA chain
-                API_KEY = "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"
+                import streamlit as st
+                API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
                 llm = ChatOpenAI(
                     model="meta-llama/llama-4-scout:free",
                     openai_api_base="https://openrouter.ai/api/v1",
