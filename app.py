@@ -5,7 +5,6 @@ import os
 import numpy as np
 import wave
 from gtts import gTTS
-import sounddevice as sd
 from st_audiorec import st_audiorec
 from huggingface_hub import InferenceClient
 from langchain.embeddings import HuggingFaceEmbeddings
