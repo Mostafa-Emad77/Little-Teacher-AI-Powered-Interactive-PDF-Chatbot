@@ -12,16 +12,12 @@ Little Teacher is an interactive Streamlit web app that transforms any PDF into 
 - **Child-Friendly Prompts:** The AI uses special prompts to explain and quiz in a way that's fun and easy for kids.
 - **Streamlit Community Cloud Ready:** Deploy with one click—no server setup required.
 
-## Demo
-
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/)
-
 ## Getting Started
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/little-teacher.git
+git clone https://github.com/Mostafa-Emad77/little-teacher.git
 cd little-teacher
 ```
 
