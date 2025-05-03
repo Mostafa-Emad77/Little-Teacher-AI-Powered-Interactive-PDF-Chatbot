@@ -225,7 +225,7 @@ if uploaded_pdf:
                 import streamlit as st
                 API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
                 llm = ChatOpenAI(
-                    model="meta-llama/llama-4-scout:free",
+                    model="qwen/qwen3-4b:free",
                     openai_api_base="https://openrouter.ai/api/v1",
                     openai_api_key=API_KEY
                 )
