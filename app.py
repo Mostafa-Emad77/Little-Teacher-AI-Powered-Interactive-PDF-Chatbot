@@ -241,31 +241,54 @@ if uploaded_pdf:
             if not chunks:
                 chunks = [text]
             try:
-                # Build FAISS vector index from all chunks
-                embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-                faiss_index = FAISS.from_texts(chunks, embedding_model)
-                retriever = faiss_index.as_retriever()
-
-                # Set up LLMpage and RetrievalQA chain
-                # Use Streamlit secrets for OpenRouter API key
-                API_KEY = st.secrets.get("OPENROUTER_API_KEY", "") 
-                llm = ChatOpenAI(
-                    model="meta-llama/llama-4-scout:free",
-                    openai_api_base="https://openrouter.ai/api/v1",
-                    openai_api_key=API_KEY
-                )
-                from langchain.chains import RetrievalQA
-                qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
-                st.session_state.qa_chain = qa_chain
-
-                # Only generate the initial teacher message if chat_history is empty
-                if not st.session_state.get("chat_history"):
-                    initial_prompt = INITIAL_PROMPTS[language]
-                    ai_response = qa_chain.run(initial_prompt)
-                    st.session_state.chat_history = [{"role": "assistant", "content": ai_response}]
-
-                    # Set a flag to trigger TTS for the initial message on the next rerun
-                    st.session_state.initial_tts_played = False
+                # Set up LLM and RetrievalQA chain
+                try:
+                    # Try using secrets first
+                    API_KEY = st.secrets.get("OPENROUTER_API_KEY", "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")
+                except Exception:
+                    # Fallback to hardcoded key if secrets are not available
+                    API_KEY = "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"
+                
+                try:
+                    llm = ChatOpenAI(
+                        model="meta-llama/llama-4-scout:free",
+                        openai_api_base="https://openrouter.ai/api/v1",
+                        openai_api_key=API_KEY,
+                        temperature=0.7,
+                        max_tokens=1000
+                    )
+                    
+                    # Test the LLM with a simple query to ensure it's working
+                    test_response = llm.invoke("Hello")
+                    
+                    # Build FAISS vector index from all chunks
+                    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+                    faiss_index = FAISS.from_texts(chunks, embedding_model)
+                    retriever = faiss_index.as_retriever()
+                    
+                    # Set up RetrievalQA chain
+                    from langchain.chains import RetrievalQA
+                    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
+                    st.session_state.qa_chain = qa_chain
+                    
+                    # Only generate the initial teacher message if chat_history is empty
+                    if not st.session_state.get("chat_history"):
+                        initial_prompt = INITIAL_PROMPTS[language]
+                        try:
+                            ai_response = qa_chain.run(initial_prompt)
+                        except Exception as e:
+                            import traceback
+                            tb = traceback.format_exc()
+                            ai_response = f"Welcome to Little Teacher! I'm here to help you learn from your book. Please ask me any questions about the content."
+                        st.session_state.chat_history = [{"role": "assistant", "content": ai_response}]
+                        
+                        # Set a flag to trigger TTS for the initial message on the next rerun
+                        st.session_state.initial_tts_played = False
+                except Exception as e:
+                    import traceback
+                    tb = traceback.format_exc()
+                    ai_response = f"AI Error: {str(e)}\n{tb}"
+                    st.session_state.chat_history = [{"role": "assistant", "content": "Welcome to Little Teacher! I'm here to help you learn from your book. Please ask me any questions about the content."}]
             except Exception as e:
                 import traceback
                 tb = traceback.format_exc()
