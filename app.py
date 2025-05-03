@@ -247,11 +247,12 @@ if uploaded_pdf:
                 retriever = faiss_index.as_retriever()
 
                 # Set up LLM and RetrievalQA chain
-                # Use Streamlit secrets for OpenRouter API key
+                # Use Streamlit secrets for OpenRouter API key 
+                API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
                 llm = ChatOpenAI(
                     model="meta-llama/llama-4-scout:free",
                     openai_api_base="https://openrouter.ai/api/v1",
-                    openai_api_key=st.secrets["OPENROUTER_API_KEY",""]
+                    openai_api_key=API_KEY
                 )
                 from langchain.chains import RetrievalQA
                 qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
