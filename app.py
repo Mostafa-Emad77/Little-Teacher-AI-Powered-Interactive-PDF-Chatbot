@@ -5,8 +5,7 @@ import os
 import numpy as np
 import wave
 from gtts import gTTS
-# import sounddevice as sd  # Removed for Streamlit Community Cloud compatibility
-from st_audiorec import st_audiorec
+import requests  # Add requests import
 from huggingface_hub import InferenceClient
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -14,13 +13,28 @@ from langchain.chat_models import ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 
+# Disable Streamlit's file watcher for PyTorch modules
+# Add this at the top of your file to prevent the error
+if hasattr(st, '_is_running_with_streamlit'):
+    import sys
+    import streamlit.watcher.path_watcher
+    old_watch_dir = streamlit.watcher.path_watcher.watch_dir
+    
+    def patched_watch_dir(path, *args, **kwargs):
+        # Skip watching PyTorch directories
+        if 'torch' in path:
+            return
+        return old_watch_dir(path, *args, **kwargs)
+    
+    streamlit.watcher.path_watcher.watch_dir = patched_watch_dir
+
 # ====== Language Dictionaries ======
 LANGUAGES = {
     "ar": {
         "title": "المعلم الصغير",
         "welcome": "مرحباً بك في المعلم الصغير",
         "book_viewer": "عارض الكتاب",
-        "choose_book": "اختر كتاباً للقراءة",
+        "choose_book": "اختر كتابٍ للقراءة",
         "no_book": "لم يتم اختيار كتاب بعد",
         "prev": "السابق",
         "next": "التالي",
@@ -66,7 +80,7 @@ INITIAL_PROMPTS = {
     اقرأ محتوى الملف وقم بإنشاء:
     1. تشويق صغير عن موضوع الملف (حقيقة مثيرة أو معلومة مدهشة)
     2. سؤال بسيط متعلق بالموضوع
-    اجعل الأسلوب مناسباً للأطفال ومشوقاً
+    اجعل الأسلوب مناسباً للأطفال ومشوق
     """,
     "en": """
     Read the content and create:
@@ -81,9 +95,9 @@ conversation_template = PromptTemplate(
     input_variables=["history", "kid_answer"],
     template="""
 أنت معلم أطفال ودود وحماسي، مهمتك هي:
-1. في البداية، اطرح سؤالاً تحفيزياً بسيطاً أو العب لعبة التخمين مع الطفل حول موضوع الكتاب
+1. في البداية، اطرح سؤال تحفيز بسيط أو العب لعبة التخمين مع الطفل حول موضوع الكتاب
 2. بعد إجابة الطفل، اشرح محتوى الكتاب بطريقة مبسطة وممتعة
-3. استخدم أسلوباً تفاعلياً وقصصياً في الشرح
+3. استخدم أسلوب تفاعلي وقصص في الشرح
 4. اطرح أسئلة تفكير بسيطة بين الحين والآخر
 
 المحادثة السابقة:
@@ -157,17 +171,28 @@ def text_to_speech(text, lang="ar"):
         st.error(f"TTS Error: {str(e)}")
         return None
 # record_audio is not used in Streamlit Community Cloud (browser-based audio only)
-    return temp_wav.name
 def transcribe_audio(file_path, lang="ar"):
-    api_key = "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"
-    client = InferenceClient(api_key=api_key)
-    with open(file_path, "rb") as audio_file:
-        audio_bytes = audio_file.read()
-    output = client.automatic_speech_recognition(
-        audio_bytes,
-        model="openai/whisper-large-v3"
-    )
-    return output.text.strip()
+    API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3"
+    headers = {
+        "Authorization": "Bearer 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",
+        "Content-Type": "audio/wav"
+    }
+    
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+        
+        response = requests.post(API_URL, headers=headers, data=data)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get("text", "").strip()
+        else:
+            st.error(f"API Error: {response.status_code} - {response.text}")
+            return "Sorry, I couldn't transcribe your audio."
+    except Exception as e:
+        st.error(f"Transcription error: {str(e)}")
+        return "Sorry, I couldn't transcribe your audio."
 
 # ====== Streamlit App ======
 st.set_page_config(page_title="Little Teacher", layout="wide")
@@ -222,12 +247,11 @@ if uploaded_pdf:
                 retriever = faiss_index.as_retriever()
 
                 # Set up LLM and RetrievalQA chain
-                import streamlit as st
-                API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
+                # Use Streamlit secrets for OpenRouter API key
                 llm = ChatOpenAI(
                     model="meta-llama/llama-4-scout:free",
                     openai_api_base="https://openrouter.ai/api/v1",
-                    openai_api_key=API_KEY
+                    openai_api_key=st.secrets["OPENROUTER_API_KEY"]
                 )
                 from langchain.chains import RetrievalQA
                 qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
@@ -352,34 +376,32 @@ with col2:
                     audio_file.close()
                     os.remove(audio_path)
     # ASR (record and transcribe)
-    # Browser-based audio recording using st_audiorec
-    st.info("اضغط زر التسجيل وتحدث لمدة 5 ثوانٍ فقط، ثم توقف عن التسجيل ليتم إرسال الرد تلقائياً.")
-    audio_data = st_audiorec()
-    if audio_data is not None:
-        st.audio(audio_data, format="audio/wav")
-        # Save audio_data to a temporary WAV file for transcription
-        import tempfile
-        import wave
-        import numpy as np
+    # Using Streamlit's native audio_input
+    st.info("اضغط زر التسجيل وتحدث، ثم توقف عن التسجيل ليتم إرسال الرد تلقائ<|im_start|>.")
+    audio_bytes = st.audio_input("تسجيل صوتي", key="audio_recorder")
+    
+    if audio_bytes is not None:
+        # Display the recorded audio
+        st.audio(audio_bytes, format="audio/wav")
+        
+        # Save audio_bytes to a temporary WAV file for transcription
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
-            wf = wave.open(temp_wav.name, "wb")
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(44100)
-            wf.writeframes(audio_data)
-            wf.close()
+            # Read the data from the UploadedFile object
+            temp_wav.write(audio_bytes.getvalue())
             wav_path = temp_wav.name
+            
         with st.spinner(texts["thinking"]):
             transcript = transcribe_audio(wav_path, lang=language)
-            # Store the transcript in a pending state to be processed on the next rerun
-            st.session_state["pending_transcript"] = transcript
-            # Simulate the send button logic
-            st.session_state.chat_history.append({"role": "user", "content": transcript})
+            # Store the transcript in a pending state
+            st.session_state.chat_history.append({"role": "transcript", "content": transcript})
+            
+            # Process the transcript with the AI
             prompt_template = conversation_template if language == "ar" else english_conversation_template
             history = "\n".join(
-                f"{texts['me'] if m['role']=='user' else texts['teacher']}{m['content']}"
+                f"{texts['me'] if m['role'] in ['user', 'transcript'] else texts['teacher']}{m['content']}"
                 for m in st.session_state.chat_history if m["role"] != "assistant" or m != st.session_state.chat_history[-1]
             )
+            
             qa_chain = st.session_state.get("qa_chain")
             if qa_chain:
                 try:
@@ -392,13 +414,22 @@ with col2:
                     ai_response = f"AI Error: {str(e)}\n{tb}"
             else:
                 ai_response = "AI Error: QA chain not initialized."
+                
             st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-            # Always render chat and play TTS for the latest assistant message
-            if ai_response:
-                st.markdown(f"**{texts['teacher']}** {ai_response}")
-                tts_path = text_to_speech(ai_response, lang=language)
-                if tts_path:
-                    audio_file = open(tts_path, "rb")
-                    st.audio(audio_file.read(), format="audio/mp3")
-                    audio_file.close()
-                    os.remove(tts_path)
+            
+            # Display AI response
+            st.markdown(f"**{texts['teacher']}** {ai_response}")
+            
+            # Convert AI response to speech
+            tts_path = text_to_speech(ai_response, lang=language)
+            if tts_path:
+                audio_file = open(tts_path, "rb")
+                st.audio(audio_file.read(), format="audio/mp3")
+                audio_file.close()
+                os.remove(tts_path)
+        
+        # Clean up the temporary WAV file
+        os.unlink(wav_path)
+        
+        # Reset the audio_recorder key to allow for a new recording
+        st.session_state.pop("audio_recorder", None)
